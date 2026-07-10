@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stargazer's Oracle - 雷诺曼</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <style>
+   
+    .bg-oracle { background-color: #F4EFE6; }      /* 温暖米色背景 */
+    .card-oracle { background-color: #ECE5D8; }    /* 卡片米灰色 */
+    .border-oracle { border-color: #C1B5A0; }      /* 古典线框色 */
+    .text-oracle-title { color: #5C4B37; }         /* 深木色文字 */
+    .text-oracle-sub { color: #8C7B66; }           /* 浅木色辅助文字 */
+
+    /*3D 翻牌动画样式 */
+    .card-perspective {
+      perspective: 1000px;
+    }
+    .card-inner {
+
+      position: relative;
+      width: 100%;
+      height: 100%;
+      text-align: center;
+      transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      transform-style: preserve-3d;
+    }
+    .card-inner.is-flipped {
+      transform: rotateY(180deg);
+    }
+    .card-face {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      -webkit-backface-visibility: hidden;
+      backface-visibility: hidden;
+      border-radius: 0.375rem;
+    }
+    .card-back {
+      background: linear-gradient(135deg, #2E284E, #1A1530);
+    }
+    .card-front {
+      background-color: #FFFFFF;
+      transform: rotateY(180deg);
+    }
+
+    /* 滚动条样式 */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #C1B5A0;
+      border-radius: 2px;
+    }
+
+    /* 封面渐入闪烁动画 */
+    @keyframes fadePulse {
+      0%, 100% { opacity: 0.7; }
+      50% { opacity: 1; }
+    }
+    .animate-pulse-slow {
+      animation: fadePulse 2.5s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="bg-oracle text-oracle-title min-h-screen font-serif antialiased selection:bg-[#C1B5A0]">
+
+  <div id="app" class="max-w-md mx-auto p-6 pb-12 min-h-screen flex flex-col justify-between relative">
+    
+    <!-- ========== 新增：启动封面页 currentStep = 0 ========== -->
+    <div v-if="currentStep === 0" 
+         class="fixed inset-0 bg-oracle z-[9999] flex flex-col items-center justify-center cursor-pointer select-none"
+         @click="enterMainPage">
+      <div class="text-center space-y-8">
+        <div class="text-5xl mb-6">🔮</div>
+        <h1 class="text-3xl tracking-widest font-semibold">Stargazer's Oracle</h1>
+        <p class="text-sm text-oracle-sub tracking-wider">Lenormand Divination System</p>
+        <div class="w-20 h-px bg-oracle-sub/40 mx-auto my-6"></div>
+        <p class="animate-pulse-slow text-sm text-oracle-sub tracking-widest">
+          点击任意位置 · 或按下 Enter 进入
+        </p>
+      </div>
+    </div>
+
+    <!-- 顶栏：歷史紀錄 -->
+    <header v-show="currentStep !== 0" class="flex justify-between items-center py-4 border-b border-oracle">
+      <h1 class="text-xl tracking-wide font-semibold cursor-pointer" @click="restart">Stargazer's Oracle</h1>
+      <button @click="showHistory = true" class="text-xs tracking-widest border border-oracle/60 px-2 py-1 rounded hover:bg-[#ECE5D8] transition text-oracle-sub hover:text-oracle-title">
+        ⏳ 历史记录
+      </button>
+    </header>
+
+    <main v-show="currentStep !== 0" class="flex-grow flex flex-col justify-center my-8">
+
+      <!-- 步骤 1：选择牌阵 -->
+      <div v-if="currentStep === 1" class="space-y-4">
+        <div @click="selectSpread('2')" class="card-oracle border border-oracle rounded-lg p-8 text-center cursor-pointer hover:bg-[#E4DBD0] transition">
+          <h2 class="text-xl font-medium tracking-widest mb-2">Two Cards</h2>
+          <p class="text-lg font-light mb-1">2 张牌</p>
+          <p class="text-xs text-oracle-sub">日常指引与连贯解读</p>
+        </div>
+
+        <div @click="selectSpread('3')" class="card-oracle border border-oracle rounded-lg p-8 text-center cursor-pointer hover:bg-[#E4DBD0] transition">
+          <h2 class="text-xl font-medium tracking-widest mb-2">Three Cards</h2>
+          <p class="text-lg font-light mb-1">3 张牌</p>
+          <p class="text-xs text-oracle-sub">快速理清方向</p>
+        </div>
+
+        <div @click="selectSpread('5')" class="card-oracle border border-oracle rounded-lg p-8 text-center cursor-pointer hover:bg-[#E4DBD0] transition">
+          <h2 class="text-xl font-medium tracking-widest mb-2">Five Cards</h2>
+          <p class="text-lg font-light mb-1">5 张牌</p>
+          <p class="text-xs text-oracle-sub">详细狀況分析</p>
+        </div>
+
+        <div @click="selectSpread('9')" class="card-oracle border border-oracle rounded-lg p-8 text-center cursor-pointer hover:bg-[#E4DBD0] transition">
+          <h2 class="text-xl font-medium tracking-widest mb-2">Box Spread</h2>
+          <p class="text-lg font-light mb-1">九宮格</p>
+          <p class="text-xs text-oracle-sub">事件因果分析</p>
+        </div>
+      </div>
+
+      <!-- 步骤 2：输入问题 -->
+      <div v-if="currentStep === 2" class="space-y-6 text-center">
+        <p class="text-sm text-oracle-sub tracking-widest">{{ maxCards }} 张牌</p>
+        <h2 class="text-3xl font-light tracking-widest mb-4">输入你的问题</h2>
+        
+        <div class="relative">
+          <textarea v-model="question" rows="6" maxlength="150" placeholder="请静心，將你想问的事情写下来……" class="w-full bg-transparent border border-oracle rounded-lg p-4 text-sm focus:outline-none focus:ring-1 focus:ring-[#5C4B37] resize-none leading-relaxed"></textarea>
+          <div class="text-right text-xs text-oracle-sub mt-1">{{ question.length }} / 150</div>
+        </div>
+
+        <div class="flex justify-between items-center pt-4">
+          <button @click="currentStep = 1" class="text-sm text-oracle-sub hover:text-oracle-title transition">返回</button>
+          <button @click="currentStep = 3" :disabled="!question.trim()" class="border border-oracle px-8 py-2.5 text-sm hover:bg-[#ECE5D8] transition disabled:opacity-30">开始抽牌</button>
+        </div>
+      </div>
+
+      <!-- 步骤 3：抽牌翻牌 -->
+      <div v-if="currentStep === 3" class="space-y-6 text-center">
+        <p class="text-xs text-oracle-sub tracking-widest">✦ 依序点击抽牌 ✦</p>
+        
+        <div :class="['gap-4 justify-center flex flex-wrap', spreadType === '9' ? 'grid grid-cols-3 w-72 mx-auto' : '']">
+          <div 
+            v-for="(card, index) in checkedCards" 
+            :key="index"
+            @click="drawAndFlipCard(index)"
+            class="card-perspective w-20 h-32 cursor-pointer transition transform hover:-translate-y-1"
+          >
+            <div class="card-inner border border-oracle/60 shadow-md rounded-md" :class="{ 'is-flipped': card.flipped }">
+              
+              <!-- 【卡牌背面】 -->
+              <div class="card-face card-back p-1 flex flex-col items-center justify-between">
+                <div class="absolute inset-1 border border-amber-200/20 rounded flex items-center justify-center">
+                  <span class="text-amber-100/40 text-xs font-light">{{ index + 1 }}</span>
+                </div>
+              </div>
+              
+              <!-- 【卡牌正面】 -->
+              <div class="card-face card-front p-1.5 flex flex-col justify-between border border-oracle/40 overflow-hidden">
+                <div class="text-[9px] text-right text-oracle-sub">#{{ index + 1 }}</div>
+                
+                <div class="w-full h-16 bg-[#FAF8F5] border border-oracle/10 rounded overflow-hidden flex items-center justify-center">
+                  <img 
+                    :src="card.cardImage" 
+                    :alt="card.nameCn" 
+                    class="w-full h-full object-cover object-center"
+                    @error="$event.target.src='https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=100'"
+                  >
+                </div>
+
+                <div class="flex flex-col items-center justify-end flex-grow pt-1">
+                  <div class="text-[10px] font-medium text-oracle-title leading-tight">{{ card.nameCn }}</div>
+                  <div class="text-[8px] text-oracle-sub italic scale-90 origin-center leading-none">{{ card.nameEn }}</div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <div v-if="isAllCardsFlipped" class="pt-6">
+          <button @click="startDivinationWithAI" :disabled="loading" class="w-full border border-oracle bg-[#5C4B37] text-white py-3 rounded-md text-sm hover:bg-[#463829] transition shadow-md">
+            {{ loading ? '🔮 解牌中...' : '🌟 点击解牌' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 步骤 5：展示圣谕大厅 -->
+      <div v-if="currentStep === 5" class="space-y-6">
+        <div class="card-oracle border border-oracle rounded-lg p-5 space-y-4 max-h-80 overflow-y-auto shadow-inner custom-scrollbar">
+          <h3 class="font-bold border-b border-oracle/40 pb-2 text-sm text-[#5C4B37]">✨ 占卜结果：</h3>
+          <p class="text-xs leading-relaxed whitespace-pre-wrap text-[#4A3D2C] font-sans">{{ aiResult }}</p>
+        </div>
+      <div class="grid grid-cols-2 gap-3">
+          <button @click="copyPrompt" class="col-span-2 border border-oracle bg-[#ECE5D8] text-xs py-3 rounded hover:bg-[#DED5C6] transition shadow-sm font-medium">✓ 已复制 PROMPT</button>
+          
+          <button @click="restart" class="border border-oracle text-xs py-3 rounded hover:bg-[#ECE5D8] transition shadow-sm">再抽一次</button>
+          <button @click="showHistory = true" class="border border-oracle text-xs py-3 rounded hover:bg-[#ECE5D8] transition shadow-sm">历史记录</button>
+      </div>
+
+        <div class="text-center pt-4 space-y-2">
+          <p class="text-[11px] text-oracle-sub tracking-wider">將 prompt 给 AI 解牌</p>
+          <div class="space-y-1.5 mx-auto max-w-[200px]">
+            <a href="https://claude.ai" target="_blank" class="block w-full border border-oracle text-xs py-2 text-center hover:bg-[#ECE5D8] tracking-widest transition rounded-sm bg-white/40">CLAUDE</a>
+            <a href="https://chatgpt.com" target="_blank" class="block w-full border border-oracle text-xs py-2 text-center hover:bg-[#ECE5D8] tracking-widest transition rounded-sm bg-white/40">CHATGPT</a>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ⏳ 历史记录 -->
+    <div v-if="showHistory" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+      <div class="bg-oracle border border-oracle max-w-sm w-full rounded-lg p-6 flex flex-col max-h-[80vh] shadow-2xl">
+        <div class="flex justify-between items-center border-b border-oracle/60 pb-3 mb-4">
+          <h3 class="font-semibold text-base tracking-wide">占卜历史存根</h3>
+          <button @click="showHistory = false" class="text-oracle-sub hover:text-oracle-title text-sm font-bold">✕</button>
+        </div>
+
+        <!-- 历史列表主体 -->
+        <div class="flex-grow overflow-y-auto space-y-4 pr-1 custom-scrollbar">
+          <div v-if="historyList.length === 0" class="text-center py-12 text-xs text-oracle-sub tracking-widest">
+            暂无历史占卜记录
+          </div>
+          <div v-for="(item, idx) in historyList" :key="idx" class="border border-oracle/40 bg-white/40 rounded p-3 space-y-2">
+            <div class="flex justify-between text-[10px] text-oracle-sub border-b border-oracle/20 pb-1">
+              <span>{{ item.date }}</span>
+              <span class="font-medium">{{ item.spread }}</span>
+            </div>
+            <p class="text-xs font-medium text-oracle-title">问：{{ item.question }}</p>
+            <p class="text-[11px] text-oracle-sub leading-tight bg-[#ECE5D8]/40 p-1.5 rounded">
+              牌阵：{{ item.cards.join('、') }}
+            </p>
+          </div>
+        </div>
+
+        <div class="border-t border-oracle/60 pt-3 mt-4 flex justify-between gap-3">
+          <button @click="clearAllHistory" v-if="historyList.length > 0" class="text-xs text-red-700/70 hover:text-red-700 transition px-2 py-1">
+            清空记录
+          </button>
+          <div v-else></div>
+          <button @click="showHistory = false" class="bg-[#5C4B37] text-white text-xs px-4 py-1.5 rounded hover:bg-[#463829] transition">
+            关 闭
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <footer v-show="currentStep !== 0" class="text-center text-[10px] text-oracle-sub tracking-widest border-t border-oracle/30 pt-4">
+     🔮 占卜纯属娱乐，请相信命运掌握在自己手中
+    </footer>
+   </div>
+
+  <script>
+    const { createApp, ref, computed, onMounted, onKeydown } = Vue;
+
+    createApp({
+      setup() {
+        // 默认打开封面页 step=0
+        const currentStep = ref(0); 
+        const spreadType = ref("2");
+        const question = ref("");
+        const checkedCards = ref([]);
+        const aiResult = ref("");
+        const promptTemplate = ref("");
+        const loading = ref(false);
+
+        // 🌟 新增：控制历史记录弹窗与列表状态
+        const showHistory = ref(false);
+        const historyList = ref([]);
+
+        // 进入主页面方法
+        const enterMainPage = () => {
+          currentStep.value = 1;
+        };
+
+        // 监听键盘 Enter 按键进入主页
+        const handleKeyPress = (e) => {
+          if (e.key === 'Enter' && currentStep.value === 0) {
+            enterMainPage();
+          }
+        };
+
+        onMounted(() => {
+          const localData = localStorage.getItem('stargazer_history');
+          if (localData) {
+            try {
+              historyList.value = JSON.parse(localData);
+            } catch(e) {
+              historyList.value = [];
+            }
+          }
+          // 挂载键盘监听
+          window.addEventListener('keydown', handleKeyPress);
+        });
+
+        const lenormandDeck = [
+          "騎士 (Rider)", "四葉草 (Clover)", "船 (Ship)", "房子 (House)", "樹 (Tree)", 
+          "雲 (Clouds)", "蛇 (Snake)", "棺材 (Coffin)", "花束 (Bouquet)", "鐮刀 (Scythe)", 
+          "鞭子 (Whip)", "鳥 (Birds)", "小孩 (Child)", "狐狸 (Fox)", "熊 (Bear)", 
+          "星星 (Star)", "鸛 (Stork)", "狗 (Dog)", "高塔 (Tower)", "花園 (Garden)", 
+          "高山 (Mountain)", "十字路口 (Crossroads)", "老鼠 (Mice)", "心 (Heart)", "圈戒 (Ring)", 
+          "書本 (Book)", "信 (Letter)", "男人 (Man)", "女人 (Woman)", "百合 (Lily)", 
+          "太陽 (Sun)", "月亮 (Moon)", "鑰匙 (Key)", "魚 (Fish)", "錨 (Anchor)", "十字架 (Cross)"
+        ];
+
+        const maxCards = computed(() => {
+          if (spreadType.value === "2") return 2;
+          if (spreadType.value === "3") return 3;
+          if (spreadType.value === "5") return 5;
+          if (spreadType.value === "9") return 9;
+          return 2;
+        });
+
+        const isAllCardsFlipped = computed(() => {
+          if (checkedCards.value.length === 0) return false;
+          return checkedCards.value.every(card => card.flipped === true);
+        });
+
+        const selectSpread = (type) => {
+          spreadType.value = type;
+          currentStep.value = 2; 
+          checkedCards.value = Array.from({ length: maxCards.value }, () => ({
+            nameCn: '',
+            nameEn: '',
+            fullName: '',
+            cardImage: '',
+            flipped: false
+          }));
+        };
+
+        const drawAndFlipCard = (index) => {
+          if (checkedCards.value[index].flipped) return;
+
+          const alreadyDrawnNames = checkedCards.value.map(c => Skinner(c.fullName));
+          const availableCards = lenormandDeck.filter(c => !alreadyDrawnNames.includes(c));
+          
+          const randomCard = availableCards[Math.floor(Math.random() * availableCards.length)];
+          
+          const match = randomCard.match(/^(.+?)\s*\((.+?)\)$/);
+          const cnName = match ? match[1] : randomCard;
+          const enName = match ? match[2] : '';
+
+          const imagePath = `images/${enName.toLowerCase()}.jpg`;
+
+          checkedCards.value[index].nameCn = cnName;
+          checkedCards.value[index].nameEn = enName;
+          checkedCards.value[index].fullName = randomCard;
+          checkedCards.value[index].cardImage = imagePath; 
+          checkedCards.value[index].flipped = true;
+        };
+
+        const Skinner = (name) => name || '';
+
+        // 连通 Python 后端并持久化存储记录
+        const startDivinationWithAI = async () => {
+          loading.value = true;
+          const finalCardList = checkedCards.value.map(c => c.fullName);
+
+          try {
+            const response = await fetch('https://lenormand-api.onrender.com/api/divine', {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                spread_type: spreadType.value,
+                question: question.value,
+                cards: finalCardList
+              })
+            });
+            const data = await response.json();
+            if (data.status === "success") {
+              aiResult.value = data.answer;
+              promptTemplate.value = data.prompt_template;
+              currentStep.value = 5; 
+
+              // 将成功的占卜塞进历史存根
+              const spreadNames = { "2": "2张牌", "3": "3张牌", "5": "5张牌", "9": "九宮格" };
+              const newRecord = {
+                date: new Date().toLocaleString(),
+                spread: spreadNames[spreadType.value] || "未知牌阵",
+                question: question.value,
+                cards: finalCardList
+              };
+              historyList.value.unshift(newRecord); // 最新的排在最上面
+              localStorage.setItem('stargazer_history', JSON.stringify(historyList.value));
+            }
+          } catch (error) {
+            alert("请确认你的 VS Code 后端终端 uvicorn 正在运行中！");
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        const clearAllHistory = () => {
+          if (confirm("确定要永久清空所有的占卜历史记录吗？")) {
+            historyList.value = [];
+            localStorage.removeItem('stargazer_history');
+          }
+        };
+
+        const copyPrompt = () => {
+          navigator.clipboard.writeText(promptTemplate.value);
+          alert("Prompt 已成功复制！");
+        };
+
+        const restart = () => {
+          currentStep.value = 1;
+          question.value = "";
+          checkedCards.value = [];
+          aiResult.value = "";
+        };
+
+        return {
+          currentStep,
+          spreadType,
+          question,
+          checkedCards,
+          maxCards,
+          aiResult,
+          loading,
+          isAllCardsFlipped,
+          showHistory,
+          historyList,
+          selectSpread,
+          drawAndFlipCard,
+          startDivinationWithAI,
+          clearAllHistory,
+          copyPrompt,
+          restart,
+          enterMainPage
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
